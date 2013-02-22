@@ -4,3 +4,6 @@ Like Blueimp's jQuery plugin (https://github.com/blueimp/jQuery-File-Upload) but
 
 ## Development Plan
 Right now my goal is simply to create a dry-running version of the file-uploader, then once that is working to my satisfaction I'll make it actually interact with the server using Blueimp's method.
+
+## Usage
+Simply download and open index.html in your favorite browser
