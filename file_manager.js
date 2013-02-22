@@ -87,21 +87,13 @@ var FileManager = (function(Backbone, Marionette) {
     FileManager.ProgressView = Marionette.ItemView.extend({
         className: "fileupload-progress"
         , template: "#progress-template"
-        , initialize: function (options) {
-            var that = this;
-            // if(options.log_rendering) {
-            //     window.setInterval(function () {
-            //         that.render();
-            //     }, 33);
-            // }
-            Marionette.ItemView.prototype.initialize.call(this, options);
-        }
         , serializeData: function () {
+            var start = this.model.get("start");
             var finish = this.model.get("finish");
             var rabbit = this.model.get("rabbit");
-            this.options.log_rendering && console.log("progress ",this.model.cid,"rendering. rabbit:", rabbit);
             var extras = {
                 percent_finished: (rabbit / finish) * 100
+                , show: this.model.is_active()
             };
             return _.extend(this.model.toJSON(), extras);
         }
@@ -109,7 +101,6 @@ var FileManager = (function(Backbone, Marionette) {
             "change rabbit": "rabbit_moved"
         }
         , rabbit_moved: function () {
-            this.options.log_rendering && console.log("rabbit moved to:",this.model.get("rabbit"));
             this.render();
         }
     });
@@ -159,15 +150,15 @@ var FileManager = (function(Backbone, Marionette) {
             "change rabbit": "render"
         }
         , serializeData: function () {
-            var start = this.model.get("start");
-            var finish = this.model.get("finish");
-            var rabbit = this.model.get("rabbit");
+            var start = this.model.get("start") || 1;
+            var finish = this.model.get("finish") || 1;
+            var rabbit = this.model.get("rabbit") || 1;
             var rate = 100;
             var data = {
-                show: rabbit > start
+                show: this.model.is_active()
                 , rate: Format.rate(rate)
                 , time: Format.time((finish - rabbit) * 8 / rate)
-                , percent_finished: rabbit / finish
+                , percent_finished: (rabbit / finish * 100).toFixed(2)
                 , amount_finished: Format.size(rabbit)
                 , finish: Format.size(finish)
             };
@@ -180,13 +171,11 @@ var FileManager = (function(Backbone, Marionette) {
         template: "#file-manager-template"
         , className: "row"
         , initialize: function (options) {
-            console.log("controller created global progress",options.global_progress.cid);
             this.files_view = new FileManager.FilesView({
                 collection: this.options.files
             });
             this.progress_view = new FileManager.ProgressView({
                 model: this.options.global_progress
-                , log_rendering: true
             });
             this.progress_numbers_view = new FileManager.ProgressNumbersView({
                 model: this.options.global_progress
@@ -202,9 +191,6 @@ var FileManager = (function(Backbone, Marionette) {
             this.files_region.show(this.files_view);
             this.progress_region.show(this.progress_view);
             this.progress_numbers_region.show(this.progress_numbers_view);
-        }
-        , serializeData: function () {
-            return {};
         }
         , events: {
             "change #file-input": "files_added"
@@ -238,7 +224,14 @@ var FileManager = (function(Backbone, Marionette) {
             });
         }
         , start_upload: function () {
-            this.options.files.upload();
+            // we want to show the global progress bar
+            // this.render();
+            var that = this;
+            this.options.files.upload({
+                success: function () {
+                    // that.render();
+                }
+            });
         }
     });
 
@@ -293,7 +286,6 @@ var FileManager = (function(Backbone, Marionette) {
             var interval_id = window.setInterval(function () {
                 progress.increment("rabbit", chunk_size);
                 global_progress.increment("rabbit", chunk_size);
-                console.log("global progress rabbit increased:",global_progress.get("rabbit"));
                 console.log("gp rabbit:",global_progress.get("rabbit"));
                 if(progress.is_finished()) {
                     window.clearInterval(interval_id);
@@ -319,7 +311,7 @@ var FileManager = (function(Backbone, Marionette) {
         , initialize: function (models, options) {
             FileManager.Collection.prototype.initialize.apply(this, arguments);
 
-            this.meta("upload_progress", new FileManager.Progress());
+            this.meta("upload_progress", options.global_progress);
             this.update_total_size();
 
         }
@@ -328,28 +320,28 @@ var FileManager = (function(Backbone, Marionette) {
                 return memo + file.get("size");
             }, 0);
 
-            console.log("total size:",total_size);
-
             this.meta("total_size", total_size);
             this.meta("upload_progress").set("finish", total_size);
         }
-        , upload: function () {
-            return this._upload_files_starting_at(0);
-        }
-        , _upload_files_starting_at: function (i) {
-            var file = this.models[i];
+        , upload: function (options) {
             var that = this;
-            if(file) {
-                return file.upload({
-                    success: function () {
-                        that._upload_files_starting_at(i+1);
-                    }
-                    , error: function () {
-                        console.log("error uploading file");
-                        that._upload_files_starting_at(i+1);
-                    }
-                });
+            var upload_ith = function (i) {
+                var file = that.models[i];
+                if(i < that.models.length) {
+                    return file.upload({
+                        success: function () {
+                            upload_ith(i+1);
+                        }
+                        , error: function () {
+                            console.log("error uploading file");
+                            upload_ith(i+1);
+                        }
+                    });
+                } else {
+                    options.success && options.success()
+                }
             }
+            return upload_ith(0);
         }
         , are_uploaded: function () {
             return this.meta("upload_progress").is_finished();
@@ -370,6 +362,12 @@ var FileManager = (function(Backbone, Marionette) {
         }
         , is_finished: function () {
             return this.get("rabbit") >= this.get("finish");
+        }
+        , has_started: function () {
+            return this.get("rabbit") > this.get("start");
+        }
+        , is_active: function () {
+            return this.has_started() && !this.is_finished();
         }
         , distance: function () {
             return this.get("finish") - this.get("start");
@@ -408,14 +406,16 @@ var FileManager = (function(Backbone, Marionette) {
         // Start the app by showing the appropriate views
         // and fetching the list of todo items, if there are any
         start: function() {
+            var global_progress = new FileManager.Progress();
             var layout = new FileManager.Layout({
-                files: new FileManager.Files()
-                , global_progress: new FileManager.Progress()
+                files: new FileManager.Files([], {
+                    global_progress: global_progress
+                })
+                , global_progress: global_progress
             });
             FileManager.main_region.show(layout);
         }
     });
-
 
     FileManager.addInitializer(function(){
         var controller = new FileManager.Controller();
