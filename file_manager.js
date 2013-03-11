@@ -96,7 +96,6 @@ var FileManager = (function(Backbone, Marionette) {
             var rabbit = this.model.get("rabbit");
             var extras = {
                 percent_finished: (rabbit / finish) * 100
-                , show: this.model.is_active()
             };
             return _.extend(this.model.toJSON(), extras);
         }
@@ -162,8 +161,7 @@ var FileManager = (function(Backbone, Marionette) {
             var rabbit = this.model.get("rabbit") || 1;
             var rate = 100;
             var data = {
-                show: this.model.is_active()
-                , rate: Format.rate(rate)
+                rate: Format.rate(rate)
                 , time: Format.time((finish - rabbit) * 8 / rate)
                 , percent_finished: (rabbit / finish * 100).toFixed(2)
                 , amount_finished: Format.size(rabbit)
@@ -178,8 +176,9 @@ var FileManager = (function(Backbone, Marionette) {
         template: "#file-manager-template"
         , className: "row"
         , initialize: function (options) {
+            this.files = options.files;
             this.files_view = new FileManager.FilesView({
-                collection: this.options.files
+                collection: this.files
             });
             this.progress_view = new FileManager.ProgressView({
                 model: this.options.global_progress
@@ -210,14 +209,14 @@ var FileManager = (function(Backbone, Marionette) {
 
                 loadImage(file, function (img) {
                     var img_html = img.outerHTML;
-                    that.options.files.create({
+                    that.files.create({
                         name: file.name
                         , size: file.size
                         , type: file.type
                         , lastModifiedDate: file.lastModifiedDate
                         , img: img_html
                     });
-                    that.options.files.update_total_size();
+                    that.files.update_total_size();
                     that.files_view.render();
                 }, {
                     maxWidth: 100
@@ -227,16 +226,19 @@ var FileManager = (function(Backbone, Marionette) {
                     , noRevoke: true
                 });
 
-                // that.options.global_progress.increment("finish", file.size);
             });
         }
         , start_upload: function () {
             // we want to show the global progress bar
             // this.render();
             var that = this;
-            this.options.files.upload({
+            this.files.upload({
                 success: function () {
-                    // that.render();
+                    console.log("success");
+                    window.setTimeout(function () {
+                        $("#global-progress").hide();
+                        $("#progress-numbers").hide();
+                    }, 1000);
                 }
             });
         }
@@ -298,9 +300,9 @@ var FileManager = (function(Backbone, Marionette) {
                     window.setTimeout(function () {
                         that.set("is_uploaded", true);
                     }, 1000);
-                    options.success && options.success();
+                    options && options.success && options.success();
                 }
-            }, 33);
+            }, 100);
         }
         , is_uploaded: function () {
             // return this.get("upload_progress").is_finished();
@@ -331,25 +333,37 @@ var FileManager = (function(Backbone, Marionette) {
             this.meta("total_size", total_size);
             this.meta("upload_progress").set("finish", total_size);
         }
-        , upload: function (options) {
+        , upload_one_at_a_time: function (options) {
             var that = this;
             var upload_ith = function (i) {
                 var file = that.models[i];
-                if(i < that.models.length) {
-                    return file.upload({
-                        success: function () {
-                            upload_ith(i+1);
+                that.meta("are_uploading", true);
+                return file.upload({
+                    success: function () {
+                        that.models.length > i+1 && upload_ith(i+1);
+                    }
+                    , error: function () {
+                        console.log("error uploading file");
+                        that.models.length > i+1 && upload_ith(i+1);
+                    }
+                });
+            };
+            return this.models.length > 0 && upload_ith(0);
+            this.meta("are_uploading", false);
+        }
+        , upload: function (options) {
+            var that = this;
+            var count = 0;
+            _.each(this.models, function (file) {
+                file.upload({
+                    success: function () {
+                        count++;
+                        if(count === that.models.length) {
+                            options && options.success && options.success();
                         }
-                        , error: function () {
-                            console.log("error uploading file");
-                            upload_ith(i+1);
-                        }
-                    });
-                } else {
-                    options.success && options.success()
-                }
-            }
-            return upload_ith(0);
+                    }
+                });
+            });
         }
         , are_uploaded: function () {
             return this.meta("upload_progress").is_finished();
