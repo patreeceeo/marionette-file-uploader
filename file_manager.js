@@ -87,6 +87,9 @@ var FileManager = (function(Backbone, Marionette) {
     FileManager.ProgressView = Marionette.ItemView.extend({
         className: "fileupload-progress"
         , template: "#progress-template"
+        , ui: {
+            bar: ".bar"
+        }
         , serializeData: function () {
             var start = this.model.get("start");
             var finish = this.model.get("finish");
@@ -101,7 +104,11 @@ var FileManager = (function(Backbone, Marionette) {
             "change rabbit": "rabbit_moved"
         }
         , rabbit_moved: function () {
-            this.render();
+            var start = this.model.get("start");
+            var finish = this.model.get("finish");
+            var rabbit = this.model.get("rabbit");
+            var percent_finished = ((rabbit - start) / finish) * 100;
+            this.ui.bar.width(percent_finished+"%");
         }
     });
 
@@ -282,14 +289,15 @@ var FileManager = (function(Backbone, Marionette) {
                 , progress = this.get("upload_progress")
                 , global_progress = this.collection.meta("upload_progress");
 
-            var chunk_size = progress.distance() / 66;
+            var chunk_size = 2500;
             var interval_id = window.setInterval(function () {
                 progress.increment("rabbit", chunk_size);
                 global_progress.increment("rabbit", chunk_size);
-                console.log("gp rabbit:",global_progress.get("rabbit"));
                 if(progress.is_finished()) {
                     window.clearInterval(interval_id);
-                    that.set("is_uploaded", true);
+                    window.setTimeout(function () {
+                        that.set("is_uploaded", true);
+                    }, 1000);
                     options.success && options.success();
                 }
             }, 33);
