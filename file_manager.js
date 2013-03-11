@@ -43,8 +43,11 @@ var FileManager = (function(Backbone, Marionette) {
         , tagName: "tr"
         // , className: "fade"
         , initialize: function () {
+            this.progress = new FileManager.Progress({
+                finish: this.model.get("size")
+            });
             this.progress_view = new FileManager.ProgressView({
-                model: this.model.get("upload_progress")
+                model: this.progress
             });
             Marionette.Layout.prototype.initialize.call(this);
         }
@@ -61,6 +64,10 @@ var FileManager = (function(Backbone, Marionette) {
         }
         , modelEvents: {
             "change is_uploaded": "render"
+            , file_chunk_done: "file_chunk_done"
+        }
+        , file_chunk_done: function (chunk_size) {
+            this.progress.increment("rabbit", chunk_size); 
         }
     });
 
@@ -167,15 +174,21 @@ var FileManager = (function(Backbone, Marionette) {
         template: "#file-manager-template"
         , className: "row"
         , initialize: function (options) {
-            this.files = options.files;
+            this.collection = options && options.files || new FileManager.Files([], {
+                // global_progress: this.global_progress
+
+            });
+            this.global_progress = new FileManager.Progress({
+                finish: this.collection.total_size()
+            });
             this.files_view = new FileManager.FilesView({
-                collection: this.files
+                collection: this.collection
             });
             this.progress_view = new FileManager.ProgressView({
-                model: this.options.global_progress
+                model: this.global_progress
             });
             this.progress_numbers_view = new FileManager.ProgressNumbersView({
-                model: this.options.global_progress
+                model: this.global_progress
             });
             Marionette.Layout.prototype.initialize.call(this, options);
         }
@@ -201,14 +214,14 @@ var FileManager = (function(Backbone, Marionette) {
 
                 loadImage(file, function (img) {
                     var img_html = img.outerHTML;
-                    that.files.create({
+                    that.collection.create({
                         name: file.name
                         , size: file.size
                         , type: file.type
                         , lastModifiedDate: file.lastModifiedDate
                         , img: img_html
                     });
-                    that.files.update_total_size();
+                    that.global_progress.increment("finish", file.size);
                     that.files_view.render();
                 }, {
                     maxWidth: 100
@@ -221,10 +234,8 @@ var FileManager = (function(Backbone, Marionette) {
             });
         }
         , start_upload: function () {
-            // we want to show the global progress bar
-            // this.render();
             var that = this;
-            this.files.upload({
+            this.collection.upload({
                 success: function () {
                     console.log("success");
                     window.setTimeout(function () {
@@ -235,7 +246,14 @@ var FileManager = (function(Backbone, Marionette) {
             });
         }
         , cancel_upload: function () {
-            this.files.cancel();
+            this.collection.cancel();
+        }
+        , collectionEvents: {
+            file_chunk_done: "file_chunk_done"
+        }
+        , file_chunk_done: function (chunk_size) {
+            console.log("chunk_size:",chunk_size);
+            this.global_progress.increment("rabbit", chunk_size);
         }
     });
 
@@ -282,15 +300,15 @@ var FileManager = (function(Backbone, Marionette) {
             Backbone.Model.prototype.initialize.call(this);
         }
         , upload: function (options) {
-            var that = this
-                , progress = this.get("upload_progress")
-                , global_progress = this.collection.meta("upload_progress");
-
+            var that = this;
             var chunk_size = 2500;
+            var count = 0;
             this.interval_id = window.setInterval(function () {
-                progress.increment("rabbit", chunk_size);
-                global_progress.increment("rabbit", chunk_size);
-                if(progress.is_finished()) {
+                // progress.increment("rabbit", chunk_size);
+                // global_progress.increment("rabbit", chunk_size);
+                count += chunk_size;
+                that.trigger("file_chunk_done", chunk_size);
+                if(count >= that.get("size")) {
                     window.clearInterval(that.interval_id);
                     window.setTimeout(function () {
                         that.set("is_uploaded", true);
@@ -321,17 +339,16 @@ var FileManager = (function(Backbone, Marionette) {
         , initialize: function (models, options) {
             FileManager.Collection.prototype.initialize.apply(this, arguments);
 
-            this.meta("upload_progress", options.global_progress);
-            this.update_total_size();
+            // this.meta("upload_progress", options.global_progress);
+            // this.update_total_size();
 
         }
-        , update_total_size: function () {
-            var total_size = this.reduce(function (memo, file) {
+        , total_size: function () {
+            return this.reduce(function (memo, file) {
                 return memo + file.get("size");
             }, 0);
 
-            this.meta("total_size", total_size);
-            this.meta("upload_progress").set("finish", total_size);
+            // this.meta("upload_progress").set("finish", total_size);
         }
         , upload_one_at_a_time: function (options) {
             var that = this;
@@ -371,7 +388,7 @@ var FileManager = (function(Backbone, Marionette) {
             });
         }
         , are_uploaded: function () {
-            return this.meta("upload_progress").is_finished();
+            // return this.meta("upload_progress").is_finished();
         }
     });
 
@@ -433,13 +450,7 @@ var FileManager = (function(Backbone, Marionette) {
         // Start the app by showing the appropriate views
         // and fetching the list of todo items, if there are any
         start: function() {
-            var global_progress = new FileManager.Progress();
-            var layout = new FileManager.Layout({
-                files: new FileManager.Files([], {
-                    global_progress: global_progress
-                })
-                , global_progress: global_progress
-            });
+            var layout = new FileManager.Layout();
             FileManager.main_region.show(layout);
         }
     });
