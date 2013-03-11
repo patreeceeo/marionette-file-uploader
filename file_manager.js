@@ -71,15 +71,6 @@ var FileManager = (function(Backbone, Marionette) {
         , loadingView: FileManager.LoadingView
         , emptyView: FileManager.EmptyView
         , template: "#file-template"
-        // , collectionEvents: {
-        //     add: "file_added"
-        // }
-        // , file_added: function (file) {
-        //     if(this.collection.where({
-        //         name: file.get("name")
-        //         , size: file.get("size")
-        //     }).length > 0)
-        // }
     });
 
 
@@ -201,6 +192,7 @@ var FileManager = (function(Backbone, Marionette) {
         , events: {
             "change #file-input": "files_added"
             , "click #start-button": "start_upload"
+            , "click #cancel-button": "cancel_upload"
         }
         , files_added: function (e) {
             var files = e.target.files;
@@ -241,6 +233,9 @@ var FileManager = (function(Backbone, Marionette) {
                     }, 1000);
                 }
             });
+        }
+        , cancel_upload: function () {
+            this.files.cancel();
         }
     });
 
@@ -292,17 +287,22 @@ var FileManager = (function(Backbone, Marionette) {
                 , global_progress = this.collection.meta("upload_progress");
 
             var chunk_size = 2500;
-            var interval_id = window.setInterval(function () {
+            this.interval_id = window.setInterval(function () {
                 progress.increment("rabbit", chunk_size);
                 global_progress.increment("rabbit", chunk_size);
                 if(progress.is_finished()) {
-                    window.clearInterval(interval_id);
+                    window.clearInterval(that.interval_id);
                     window.setTimeout(function () {
                         that.set("is_uploaded", true);
                     }, 1000);
                     options && options.success && options.success();
                 }
-            }, 100);
+            }, 100); 
+        }
+        , cancel: function () {
+            window.clearInterval(this.interval_id);
+            this.get("upload_progress").reset();
+            this.collection.meta("upload_progress").reset();
         }
         , is_uploaded: function () {
             // return this.get("upload_progress").is_finished();
@@ -363,6 +363,11 @@ var FileManager = (function(Backbone, Marionette) {
                         }
                     }
                 });
+            });
+        }
+        , cancel: function () {
+            _.each(this.models, function (file) {
+                file.cancel();
             });
         }
         , are_uploaded: function () {
@@ -441,9 +446,6 @@ var FileManager = (function(Backbone, Marionette) {
 
     FileManager.addInitializer(function(){
         var controller = new FileManager.Controller();
-        // new FileManager.Router({
-        //     controller: controller
-        // });
         controller.start();
     });
 
