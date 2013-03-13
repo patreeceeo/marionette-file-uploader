@@ -5,17 +5,13 @@ describe("FileManager", function() {
 
     beforeEach(function () {
         Marionette.Renderer.render = function () {};
-        global_progress = new FileManager.Progress();
         files = new FileManager.Files([
             { name: "test1", size: 100 }
             , { name: "test2", size: 200 }
             , { name: "test3", size: 300 }
-        ], {
-            global_progress: global_progress
-        });
+        ]);
         layout = new FileManager.Layout({
             files: files
-            , global_progress: global_progress
         });
     });
 

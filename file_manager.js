@@ -49,7 +49,7 @@ var FileManager = (function(Backbone, Marionette) {
             this.progress_view = new FileManager.ProgressView({
                 model: this.progress
             });
-            Marionette.Layout.prototype.initialize.call(this);
+            Marionette.Layout.prototype.initialize.apply(this, arguments);
         }
         , regions: {
             progress_region: ".progress-container"
@@ -57,17 +57,25 @@ var FileManager = (function(Backbone, Marionette) {
         , onRender: function () {
             this.progress_region.show(this.progress_view);
         }
-        , serializeData: function () {
-            return {
-                file: this.model.toJSON()
-            }
+        , events: {
+            "click .cancel-file-button": "cancel"
+        }
+        , cancel: function () {
+            this.model.cancel();
+            this.progress.reset();
+            this.model.collection.remove(this.model);
+            this.close();
         }
         , modelEvents: {
-            "change is_uploaded": "render"
+            "change:is_uploaded": "render"
             , file_chunk_done: "file_chunk_done"
+            , file_chunk_undone: "file_chunk_undone"
         }
         , file_chunk_done: function (chunk_size) {
             this.progress.increment("rabbit", chunk_size); 
+        }
+        , file_chunk_undone: function (chunk_size) {
+            this.progress.increment("rabbit", -chunk_size);
         }
     });
 
@@ -77,9 +85,8 @@ var FileManager = (function(Backbone, Marionette) {
         , tagName: "tbody"
         , loadingView: FileManager.LoadingView
         , emptyView: FileManager.EmptyView
-        , template: "#file-template"
+        , template: "#files-template"
     });
-
 
 
     FileManager.ProgressView = Marionette.ItemView.extend({
@@ -88,17 +95,8 @@ var FileManager = (function(Backbone, Marionette) {
         , ui: {
             bar: ".bar"
         }
-        , serializeData: function () {
-            var start = this.model.get("start");
-            var finish = this.model.get("finish");
-            var rabbit = this.model.get("rabbit");
-            var extras = {
-                percent_finished: (rabbit / finish) * 100
-            };
-            return _.extend(this.model.toJSON(), extras);
-        }
         , modelEvents: {
-            "change rabbit": "rabbit_moved"
+            "change:rabbit": "rabbit_moved"
         }
         , rabbit_moved: function () {
             var start = this.model.get("start");
@@ -151,7 +149,7 @@ var FileManager = (function(Backbone, Marionette) {
     FileManager.ProgressNumbersView = Marionette.ItemView.extend({
         template: "#progress-numbers-template"
         , modelEvents: {
-            "change rabbit": "render"
+            "change:rabbit": "render"
         }
         , serializeData: function () {
             var start = this.model.get("start") || 1;
@@ -211,15 +209,20 @@ var FileManager = (function(Backbone, Marionette) {
             var files = e.target.files;
             var that = this;
             _.each(files, function (file) {
+                console.log("file:",file);
 
                 loadImage(file, function (img) {
                     var img_html = img.outerHTML;
+                    console.log("img:",img);
                     that.collection.create({
                         name: file.name
                         , size: file.size
                         , type: file.type
                         , lastModifiedDate: file.lastModifiedDate
                         , img: img_html
+                    },
+                    { 
+                        merge: true
                     });
                     that.global_progress.increment("finish", file.size);
                     that.files_view.render();
@@ -232,12 +235,12 @@ var FileManager = (function(Backbone, Marionette) {
                 });
 
             });
+            $("form")[0].reset();
         }
         , start_upload: function () {
             var that = this;
             this.collection.upload({
                 success: function () {
-                    console.log("success");
                     window.setTimeout(function () {
                         $("#global-progress").hide();
                         $("#progress-numbers").hide();
@@ -247,13 +250,24 @@ var FileManager = (function(Backbone, Marionette) {
         }
         , cancel_upload: function () {
             this.collection.cancel();
+            _.each(this.collection.models, function (file) {
+                file.set("id", "bizzaro"); 
+            });
+            this.collection.reset();
         }
         , collectionEvents: {
             file_chunk_done: "file_chunk_done"
+            , file_chunk_undone: "file_chunk_undone"
+            , file_chunk_canceled: "file_chunk_canceled"
         }
         , file_chunk_done: function (chunk_size) {
-            console.log("chunk_size:",chunk_size);
             this.global_progress.increment("rabbit", chunk_size);
+        }
+        , file_chunk_undone: function (chunk_size) {
+            this.global_progress.increment("rabbit", -chunk_size);
+        }
+        , file_chunk_canceled: function (chunk_size) {
+            this.global_progress.increment("finish", -chunk_size);
         }
     });
 
@@ -265,7 +279,7 @@ var FileManager = (function(Backbone, Marionette) {
 
     FileManager.Collection = Backbone.Collection.extend({
         initialize: function(models, options) {
-            Backbone.Collection.prototype.initialize.call(this);
+            Backbone.Collection.prototype.initialize.call(this, models, options);
             this._meta = {};
             _.extend(this._meta, options);
         }
@@ -291,22 +305,19 @@ var FileManager = (function(Backbone, Marionette) {
             is_uploaded: false
         }
         , initialize: function (attributes, options) {
-            this.set("upload_progress", new FileManager.Progress({
-                finish: attributes.size
-            }));
             // this is an attempt to prevent the same file from
             // being added twice
+            // TODO: make this some kind of content hash like a CRC32
             this.set("id", attributes.name+attributes.size);
-            Backbone.Model.prototype.initialize.call(this);
+            Backbone.Model.prototype.initialize.call(this, attributes, options);
         }
         , upload: function (options) {
             var that = this;
             var chunk_size = 2500;
             var count = 0;
             this.interval_id = window.setInterval(function () {
-                // progress.increment("rabbit", chunk_size);
-                // global_progress.increment("rabbit", chunk_size);
                 count += chunk_size;
+                that.set("amount_done", count);
                 that.trigger("file_chunk_done", chunk_size);
                 if(count >= that.get("size")) {
                     window.clearInterval(that.interval_id);
@@ -318,9 +329,10 @@ var FileManager = (function(Backbone, Marionette) {
             }, 100); 
         }
         , cancel: function () {
+            this.trigger("file_chunk_undone", this.get("amount_done"));
+            this.trigger("file_chunk_canceled", this.get("amount_done"));
+            this.set("amount_done", 0);
             window.clearInterval(this.interval_id);
-            this.get("upload_progress").reset();
-            this.collection.meta("upload_progress").reset();
         }
         , is_uploaded: function () {
             // return this.get("upload_progress").is_finished();

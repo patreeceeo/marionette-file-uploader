@@ -10,6 +10,11 @@
  * http://www.opensource.org/licenses/MIT
  */
 
+form {
+    display: inline;
+    margin: 0;
+}
+
 .fileinput-button {
   position: relative;
   overflow: hidden;
