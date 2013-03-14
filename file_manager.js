@@ -41,7 +41,6 @@ var FileManager = (function(Backbone, Marionette) {
     FileManager.FileView = Marionette.Layout.extend({
         template: "#file-template"
         , tagName: "tr"
-        // , className: "fade"
         , initialize: function () {
             this.progress = new FileManager.Progress({
                 finish: this.model.get("size")
@@ -59,6 +58,10 @@ var FileManager = (function(Backbone, Marionette) {
         }
         , events: {
             "click .cancel-file-button": "cancel"
+            , "click .start-file-button": "start"
+        }
+        , start: function () {
+            this.model.upload();
         }
         , cancel: function () {
             this.model.cancel();
@@ -97,13 +100,20 @@ var FileManager = (function(Backbone, Marionette) {
         }
         , modelEvents: {
             "change:rabbit": "rabbit_moved"
+            , "change:finish": "finish_moved"
+        }
+        , finish_moved: function () {
+            this.adjust_bar_width();
         }
         , rabbit_moved: function () {
+            this.adjust_bar_width();
+        }
+        , adjust_bar_width: function () {
             var start = this.model.get("start");
             var finish = this.model.get("finish");
             var rabbit = this.model.get("rabbit");
             var percent_finished = ((rabbit - start) / finish) * 100;
-            this.ui.bar.width(percent_finished+"%");
+            this.$(".bar").width(percent_finished+"%");
         }
     });
 
@@ -209,11 +219,9 @@ var FileManager = (function(Backbone, Marionette) {
             var files = e.target.files;
             var that = this;
             _.each(files, function (file) {
-                console.log("file:",file);
 
                 loadImage(file, function (img) {
                     var img_html = img.outerHTML;
-                    console.log("img:",img);
                     that.collection.create({
                         name: file.name
                         , size: file.size
@@ -315,6 +323,7 @@ var FileManager = (function(Backbone, Marionette) {
             var that = this;
             var chunk_size = 2500;
             var count = 0;
+            options && options.ready && options.ready();
             this.interval_id = window.setInterval(function () {
                 count += chunk_size;
                 that.set("amount_done", count);
@@ -348,38 +357,29 @@ var FileManager = (function(Backbone, Marionette) {
         base_url: "/api/files"
         , url: "/" // just to make backbone happy for now
         , model: FileManager.File
-        , initialize: function (models, options) {
-            FileManager.Collection.prototype.initialize.apply(this, arguments);
-
-            // this.meta("upload_progress", options.global_progress);
-            // this.update_total_size();
-
-        }
         , total_size: function () {
             return this.reduce(function (memo, file) {
                 return memo + file.get("size");
             }, 0);
-
-            // this.meta("upload_progress").set("finish", total_size);
         }
-        , upload_one_at_a_time: function (options) {
-            var that = this;
-            var upload_ith = function (i) {
-                var file = that.models[i];
-                that.meta("are_uploading", true);
-                return file.upload({
-                    success: function () {
-                        that.models.length > i+1 && upload_ith(i+1);
-                    }
-                    , error: function () {
-                        console.log("error uploading file");
-                        that.models.length > i+1 && upload_ith(i+1);
-                    }
-                });
-            };
-            return this.models.length > 0 && upload_ith(0);
-            this.meta("are_uploading", false);
-        }
+        // , upload_one_at_a_time: function (options) {
+        //     var that = this;
+        //     var upload_ith = function (i) {
+        //         var file = that.models[i];
+        //         that.meta("are_uploading", true);
+        //         return file.upload({
+        //             success: function () {
+        //                 that.models.length > i+1 && upload_ith(i+1);
+        //             }
+        //             , error: function () {
+        //                 console.log("error uploading file");
+        //                 that.models.length > i+1 && upload_ith(i+1);
+        //             }
+        //         });
+        //     };
+        //     return this.models.length > 0 && upload_ith(0);
+        //     this.meta("are_uploading", false);
+        // }
         , upload: function (options) {
             var that = this;
             var count = 0;
@@ -389,6 +389,7 @@ var FileManager = (function(Backbone, Marionette) {
                         count++;
                         if(count === that.models.length) {
                             options && options.success && options.success();
+                            that.meta("are_uploaded", true);
                         }
                     }
                 });
@@ -398,9 +399,16 @@ var FileManager = (function(Backbone, Marionette) {
             _.each(this.models, function (file) {
                 file.cancel();
             });
+            this.meta("are_uploaded", false);
         }
         , are_uploaded: function () {
-            // return this.meta("upload_progress").is_finished();
+            return this.meta("are_uploaded") || false;
+        }
+        , events: {
+            add: "files_added"
+        }
+        , files_added: function () {
+            this.meta("are_uploaded", false);
         }
     });
 
