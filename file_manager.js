@@ -59,6 +59,7 @@ var FileManager = (function(Backbone, Marionette) {
         , events: {
             "click .cancel-file-button": "cancel"
             , "click .start-file-button": "start"
+            , "click .delete-file-button": "delete"
         }
         , start: function () {
             this.model.upload();
@@ -68,6 +69,13 @@ var FileManager = (function(Backbone, Marionette) {
             this.progress.reset();
             this.model.collection.remove(this.model);
             this.close();
+        }
+        , delete: function () {
+            if(window.confirm("Are you really really sure you want to delete "+this.model.get("name")+"?")) {
+                this.model.cancel();
+                this.model.collection.remove(this.model);
+                this.close();
+            }
         }
         , modelEvents: {
             "change:is_uploaded": "render"
@@ -200,6 +208,11 @@ var FileManager = (function(Backbone, Marionette) {
             });
             Marionette.Layout.prototype.initialize.call(this, options);
         }
+        , serializeData: function () {
+            return {
+                files_are_uploaded: this.collection.are_uploaded()
+            }
+        }
         , regions: {
             files_region: "#files"
             , progress_region: "#global-progress"
@@ -214,6 +227,7 @@ var FileManager = (function(Backbone, Marionette) {
             "change #file-input": "files_added"
             , "click #start-button": "start_upload"
             , "click #cancel-button": "cancel_upload"
+            , "click #delete-button": "delete_files"
         }
         , files_added: function (e) {
             var files = e.target.files;
@@ -263,10 +277,16 @@ var FileManager = (function(Backbone, Marionette) {
             });
             this.collection.reset();
         }
+        , delete_files: function () {
+            if(window.confirm("Are you really really sure you want to delete ALL the files?")) {
+                this.collection.delete();
+            }
+        }
         , collectionEvents: {
             file_chunk_done: "file_chunk_done"
             , file_chunk_undone: "file_chunk_undone"
             , file_chunk_canceled: "file_chunk_canceled"
+            , file_done: "render"
         }
         , file_chunk_done: function (chunk_size) {
             this.global_progress.increment("rabbit", chunk_size);
@@ -400,6 +420,10 @@ var FileManager = (function(Backbone, Marionette) {
                 file.cancel();
             });
             this.meta("are_uploaded", false);
+        }
+        , delete: function () {
+            this.cancel();
+            this.reset();
         }
         , are_uploaded: function () {
             return this.meta("are_uploaded") || false;

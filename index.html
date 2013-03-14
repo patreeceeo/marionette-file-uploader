@@ -37,21 +37,21 @@
                   <form>
                       <span class="btn btn-success fileinput-button">
                           <i class="icon-plus icon-white"></i>
-                          <span>Add files...</span>
+                          <span>Add Files...</span>
                           <input type="file" name="files[]" id="file-input" multiple>
                       </span>
                   </form>
                   <button type="submit" id="start-button" class="btn btn-primary start">
                       <i class="icon-upload icon-white"></i>
-                      <span>Start upload</span>
+                      <span>Start All</span>
                   </button>
                   <button id="cancel-button" type="reset" class="btn btn-warning cancel">
                       <i class="icon-ban-circle icon-white"></i>
-                      <span>Cancel upload</span>
+                      <span>Cancel All</span>
                   </button>
-                  <button type="button" class="btn btn-danger delete">
+                  <button id="delete-button" type="button" class="btn btn-danger delete">
                       <i class="icon-trash icon-white"></i>
-                      <span>Delete</span>
+                      <span>Delete All</span>
                   </button>
               </div>
               <!-- The global progress information -->
@@ -94,7 +94,7 @@
           {{/is_uploaded}}
           {{#is_uploaded}}
           <td class="delete">
-              <button type="button" class="btn btn-danger delete">
+              <button type="button" class="btn btn-danger delete delete-file-button">
                   <i class="icon-trash icon-white"></i>
                   <span>Delete</span>
               </button>
@@ -114,8 +114,7 @@
           {{rate}} | {{time}} | {{percent_finished}}% | {{amount_finished}} | {{finish}}
       </script>
       <script type="text/javascript">
-          // kickstart my rockin' rollin' heart
-      FileManager.start();
+          FileManager.start();
       </script>
   </body>
 </html>
