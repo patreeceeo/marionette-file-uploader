@@ -108,15 +108,13 @@ var FileManager = (function(Backbone, Marionette) {
             {
                 attribute: 'is_image'
                 , method: function () {
-                    var type = this.extract_type_from_data();
-                    return type[0] == 'image' || type[1] == 'image';
+                    return this.model.is_image();
                 }
             }
             , {
                 attribute: 'is_text'
                 , method: function () {
-                    var type = this.extract_type_from_data();
-                    return type[0] == 'text' || type[1] == 'text';
+                    return this.model.is_text();
                 }
             }
             , {
@@ -132,9 +130,10 @@ var FileManager = (function(Backbone, Marionette) {
                 }
             }
         ]
-        , extract_type_from_data: function () {
-            return this.model.get('data').match(/data:([\w]+)\/([\w]+);/);
-        }
+        // , extract_type_from_data: function () {
+        //     return this.model.get('data').match(/data:([\w]+)\/([\w]+);/) ||
+        //         [ 'text', 'plain' ];
+        // }
     });
 
 
@@ -279,30 +278,29 @@ var FileManager = (function(Backbone, Marionette) {
         , files_added: function (e) {
             var files = e.target.files;
             var that = this;
-            _.each(files, function (file) {
-
-                loadImage(file, function (img) {
-                    var img_html = img.outerHTML;
-                    var data = $(img).attr('src');
-                    that.collection.create({
-                        name: file.name
-                        , size: file.size
-                        , type: file.type
-                        , lastModifiedDate: file.lastModifiedDate
-                        , img: img_html
-                        , data: data
-                    },
-                    { 
-                        merge: true
-                    });
-                    that.global_progress.increment("finish", file.size);
-                    that.files_view.render();
-                }, {
-                    maxWidth: 100
-                    , maxHeight: 100
-                    , minWidth: 100
-                    , noRevoke: true
+            _.each(files, function (file) { 
+                console.log('type', file.type);
+                var file_model = that.collection.create ({
+                    name: file.name
+                    , size: file.size
+                    , type: file.type
+                    , lastModifiedDate: file.lastModifiedDate
                 });
+                that.global_progress.increment("finish", file.size);
+
+                if(file_model.is_image()) {
+                    console.log('its an image!');
+                    loadImage(file, function (img) {
+                        var data = $(img).attr('src');
+                        file_model.set('data', data);
+                        that.files_view.render();
+                    }, {
+                        maxWidth: 100
+                        , maxHeight: 100
+                        , minWidth: 100
+                        , noRevoke: true
+                    });
+                }
 
             });
             $("form")[0].reset();
@@ -376,13 +374,32 @@ var FileManager = (function(Backbone, Marionette) {
         , url: '/' // just to make backbone happy for now
         , defaults: {
             is_uploaded: false
+            , data: ''
         }
         , initialize: function (attributes, options) {
-            // this is an attempt to prevent the same file from
-            // being added twice
-            this.set('id', crc32(attributes.data));
-            this.set('size', attributes.data.length);
             Backbone.Model.prototype.initialize.call(this, attributes, options);
+            if(attributes.data) {
+                this.set_data_attributes(attributes.data);
+            }
+        }
+        , set_data_attributes: function (data) {
+            if(!this.has('size')) {
+                this.set('size', data.length, {silent: true});
+            }
+            if(!this.has('type')) {
+                var type = 'text/plain';
+                var matches = data.match(/data:(\w+\/\w+);/);
+                if(matches) {
+                    type = matches[1];
+                }
+                this.set('type', type);
+            }
+        }
+        , set: function (key, value) {
+            Backbone.Model.prototype.set.apply(this, arguments);
+            if(key == 'data') {
+                this.set_data_attributes(value);
+            }
         }
         , upload: function (options) {
             var that = this;
@@ -411,6 +428,14 @@ var FileManager = (function(Backbone, Marionette) {
         , is_uploaded: function () {
             // return this.get("upload_progress").is_finished();
             return this.get("is_uploaded");
+        }
+        , is_image: function () {
+            var type = this.get('type');
+            return type === 'image/jpeg' || type === 'image/png' || type == 'image/gif';
+        }
+        , is_text: function () {
+            var type = this.get('type');
+            return type === 'text/plain';
         }
         , download: function () {
         }

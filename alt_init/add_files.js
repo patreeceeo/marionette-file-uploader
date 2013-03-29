@@ -8,7 +8,7 @@ FileManager.addInitializer(function(){
         }
         , {
             name: "file2"
-            , data: "data:text/plain;charset=US-ASCII,This is a test. It keeps going and going and going and going and going."
+            , data: "This is a test. It keeps going and going and going and going and going."
         }
     ]);
 
