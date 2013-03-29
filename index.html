@@ -23,7 +23,16 @@
     <script type="text/javascript" src="lib/backbone.syphon.js"></script>
     <script type="text/javascript" src="lib/backbone.marionette.js"></script>
     <script type="text/javascript" src="lib/hogan-3.0.0.js"></script>
+    <script type="text/javascript" src="lib/crc32.js"></script>
     <script type="text/javascript" src="file_manager.js"></script>
+    <script type="text/javascript" src="fixtures.js"></script>
+    <script type="text/javascript" src="alt_init/add_files.js"></script>
+    <!-- <script type="text/Javascript"> -->
+    <!--     FileManager.addInitializer(function(){ -->
+    <!--         var controller = new FileManager.Controller(); -->
+    <!--         controller.start(); -->
+    <!--     }); -->
+    <!-- </script> -->
   </head>
   <body>
       <noscript>Javascript must be enabled for the correct page display</noscript>
@@ -69,7 +78,12 @@
           </table>
       </script>
       <script type="text/x-mustache" id="file-template">      
-          <td class="preview"><span>{{{img}}}</span></td>
+          {{#is_image}}
+          <td class="preview"><span><img src='data:{{type}};{{data}}'></span></td>
+          {{/is_image}}
+          {{#is_text}}
+          <td class="preview"><span>{{text_preview}}</span></td>
+          {{/is_text}}
           <td class="name"><span>{{name}}<span></td>
           <td class="size"><span>{{size}}</span></td>
           {{#error}}

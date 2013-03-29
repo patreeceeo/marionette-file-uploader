@@ -1,14 +1,8 @@
 @charset "UTF-8";
-/*
- * jQuery File Upload UI Plugin CSS 6.10
- * https://github.com/blueimp/jQuery-File-Upload
- *
- * Copyright 2010, Sebastian Tschan
- * https://blueimp.net
- *
- * Licensed under the MIT license:
- * http://www.opensource.org/licenses/MIT
- */
+
+html {
+    font-size: 100%;
+}
 
 form {
     display: inline;
@@ -86,4 +80,8 @@ form {
   .files .delete {
     width: 60px;
   }
+}
+
+.preview img {
+    max-height: 20em;
 }

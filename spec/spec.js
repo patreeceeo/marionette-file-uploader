@@ -1,14 +1,14 @@
 describe("FileManager", function() {
-    "use strict";
+    'use strict';
 
     var layout, files, global_progress, file, file2, file3;
 
     beforeEach(function () {
         Marionette.Renderer.render = function () {};
         files = new FileManager.Files([
-            { name: "test1", size: 100 }
-            , { name: "test2", size: 200 }
-            , { name: "test3", size: 300 }
+            { name: 'test1', size: 100 }
+            , { name: 'test2', size: 200 }
+            , { name: 'test3', size: 300 }
         ]);
         layout = new FileManager.Layout({
             files: files

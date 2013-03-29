@@ -1,3 +1,4 @@
+
 var FileManager = (function(Backbone, Marionette) {
     "use strict";
 
@@ -38,7 +39,22 @@ var FileManager = (function(Backbone, Marionette) {
         main_region: "#main"
     });
 
-    FileManager.FileView = Marionette.Layout.extend({
+    FileManager.BaseLayout = Marionette.Layout.extend({
+        serializeData: function () {
+            var data = Marionette.Layout.prototype.serializeData.call(this); 
+
+            var gms = Marionette.getOption(this, 'getMethods');
+            var that = this;
+
+            _.each(gms, function (gm) {
+                data[gm.attribute] = gm.method.call(that);
+            });
+
+            return data;
+        }
+    });
+
+    FileManager.FileView = FileManager.BaseLayout.extend({
         template: "#file-template"
         , tagName: "tr"
         , initialize: function () {
@@ -87,6 +103,37 @@ var FileManager = (function(Backbone, Marionette) {
         }
         , file_chunk_undone: function (chunk_size) {
             this.progress.increment("rabbit", -chunk_size);
+        }
+        , getMethods: [
+            {
+                attribute: 'is_image'
+                , method: function () {
+                    var type = this.extract_type_from_data();
+                    return type[0] == 'image' || type[1] == 'image';
+                }
+            }
+            , {
+                attribute: 'is_text'
+                , method: function () {
+                    var type = this.extract_type_from_data();
+                    return type[0] == 'text' || type[1] == 'text';
+                }
+            }
+            , {
+                attribute: 'text'
+                , method: function () {
+                    return this.model.get_text();
+                }
+            }
+            , {
+                attribute: 'text_preview'
+                , method: function () {
+                    return this.model.get_text().substring(0, 20) + '…';
+                }
+            }
+        ]
+        , extract_type_from_data: function () {
+            return this.model.get('data').match(/data:([\w]+)\/([\w]+);/);
         }
     });
 
@@ -236,12 +283,14 @@ var FileManager = (function(Backbone, Marionette) {
 
                 loadImage(file, function (img) {
                     var img_html = img.outerHTML;
+                    var data = $(img).attr('src');
                     that.collection.create({
                         name: file.name
                         , size: file.size
                         , type: file.type
                         , lastModifiedDate: file.lastModifiedDate
                         , img: img_html
+                        , data: data
                     },
                     { 
                         merge: true
@@ -252,7 +301,6 @@ var FileManager = (function(Backbone, Marionette) {
                     maxWidth: 100
                     , maxHeight: 100
                     , minWidth: 100
-                    // , canvas: true
                     , noRevoke: true
                 });
 
@@ -272,9 +320,6 @@ var FileManager = (function(Backbone, Marionette) {
         }
         , cancel_upload: function () {
             this.collection.cancel();
-            _.each(this.collection.models, function (file) {
-                file.set("id", "bizzaro"); 
-            });
             this.collection.reset();
         }
         , delete_files: function () {
@@ -327,16 +372,16 @@ var FileManager = (function(Backbone, Marionette) {
     });
 
     FileManager.File = Backbone.Model.extend({
-        base_url: "/api/files"
-        , url: "/" // just to make backbone happy for now
+        base_url: '/api/files'
+        , url: '/' // just to make backbone happy for now
         , defaults: {
             is_uploaded: false
         }
         , initialize: function (attributes, options) {
             // this is an attempt to prevent the same file from
             // being added twice
-            // TODO: make this some kind of content hash like a CRC32
-            this.set("id", attributes.name+attributes.size);
+            this.set('id', crc32(attributes.data));
+            this.set('size', attributes.data.length);
             Backbone.Model.prototype.initialize.call(this, attributes, options);
         }
         , upload: function (options) {
@@ -371,6 +416,11 @@ var FileManager = (function(Backbone, Marionette) {
         }
         , save: function () {
         }
+        , get_text: function () {
+            var data = this.get('data')
+                , index = Math.max(data.indexOf(';'), data.indexOf(',')+1);
+            return data.substring(index);
+        }
     });
 
     FileManager.Files = FileManager.Collection.extend({
@@ -382,24 +432,6 @@ var FileManager = (function(Backbone, Marionette) {
                 return memo + file.get("size");
             }, 0);
         }
-        // , upload_one_at_a_time: function (options) {
-        //     var that = this;
-        //     var upload_ith = function (i) {
-        //         var file = that.models[i];
-        //         that.meta("are_uploading", true);
-        //         return file.upload({
-        //             success: function () {
-        //                 that.models.length > i+1 && upload_ith(i+1);
-        //             }
-        //             , error: function () {
-        //                 console.log("error uploading file");
-        //                 that.models.length > i+1 && upload_ith(i+1);
-        //             }
-        //         });
-        //     };
-        //     return this.models.length > 0 && upload_ith(0);
-        //     this.meta("are_uploading", false);
-        // }
         , upload: function (options) {
             var that = this;
             var count = 0;
@@ -499,10 +531,6 @@ var FileManager = (function(Backbone, Marionette) {
         }
     });
 
-    FileManager.addInitializer(function(){
-        var controller = new FileManager.Controller();
-        controller.start();
-    });
 
     return FileManager;
 })(Backbone, Marionette);
