@@ -126,14 +126,10 @@ var FileManager = (function(Backbone, Marionette) {
             , {
                 attribute: 'text_preview'
                 , method: function () {
-                    return this.model.get_text().substring(0, 20) + '…';
+                    return this.model.get_text().substring(0, 140) + '…';
                 }
             }
         ]
-        // , extract_type_from_data: function () {
-        //     return this.model.get('data').match(/data:([\w]+)\/([\w]+);/) ||
-        //         [ 'text', 'plain' ];
-        // }
     });
 
 
@@ -295,10 +291,7 @@ var FileManager = (function(Backbone, Marionette) {
                         file_model.set('data', data);
                         that.files_view.render();
                     }, {
-                        maxWidth: 100
-                        , maxHeight: 100
-                        , minWidth: 100
-                        , noRevoke: true
+                        noRevoke: true
                     });
                 }
 

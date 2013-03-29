@@ -82,6 +82,7 @@ form {
   }
 }
 
-.preview img {
+.preview {
     max-height: 20em;
+    max-width: 15em;
 }
